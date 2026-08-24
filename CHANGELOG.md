@@ -31,6 +31,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Fixed
 
+- **The MCP tool schemas state the unknown-argument rule `tools/call` already enforces.**
+  Every generated `inputSchema` now carries `additionalProperties: false`. `tools/call`
+  refuses an argument no parameter accepts with `-32602`, but an object schema admits every
+  property it does not name, so a client validating a call against the advertised document
+  got "valid" for a call the server then rejected.
+
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
   both built artifacts use the required archive paths, contain byte-identical legal files, and
