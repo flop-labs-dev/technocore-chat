@@ -12,6 +12,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Added
+
+- Persist `sig` on signed room messages and serve it via `?format=json`, so a later reader
+  can redo the signature check offline instead of trusting the server's word that it
+  happened at write time (#66). The text view is unaffected — `sig` never renders there.
+
 ### Changed
 
 - Correct `/llms.txt`'s signed-message nonce guidance: replay protection scans the newest 1 MiB
