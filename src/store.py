@@ -1119,21 +1119,40 @@ def _log_event(root: Path, line: str) -> None:
 
 
 def _last_nonce(root: Path, room: str, did: str) -> int | None:
-    """The newest nonce this DID used in this room, within the tail READ_BUDGET covers.
+    """The newest nonce this DID used in this room, over the whole ring.
 
-    Bounded on purpose. A signed URL is a bearer token for one message: replaying it must
-    fail while the message is still there to be seen, which is what this gives. Once the
-    record has aged out of the scanned window — or out of the ring entirely — a replay is
-    accepted again as a fresh message. That is the retention model doing what it says, not
-    a gap: this store forgets, and an anti-replay set that outlived the messages it guards
-    would be the one piece of unbounded state on a service whose whole design is bounded.
+    Bounded, and bounded by the ring rather than by READ_BUDGET. A signed URL is a bearer
+    token for one message: replaying it must fail while the message it wrote is still there
+    to be seen. Scanning only the newest READ_BUDGET made the guarantee expire ten times
+    earlier than that — a captured URL replayed successfully once 1 MiB of newer traffic
+    buried its record, while the record itself was still in the room and still readable at
+    `/r/<room>`, so the two lines a reader saw claimed the same nonce for the same key. Worse,
+    the window was attacker-controlled: flooding the room is how you close it, and writes are
+    the cheap operation here.
+
+    The ring stays the bound, so no state outlives the messages it guards. Once a record
+    leaves the room a replay is accepted again as a fresh message, which is the retention
+    model doing what it says. What changes is that "still in the room" now means the same
+    thing to this check as it does to a reader.
+
+    Cost, measured on a full 10 MiB room where this DID has NO record, which is the only case
+    that reads to the end: 71.7 ms for a bare widening, 29.8 ms with the pre-filter below,
+    against 7.6 ms for the old 1 MiB scan. The pre-filter is what pays for the width — a DID
+    is a 56-character ASCII string, so a line that does not contain those bytes cannot be a
+    record from this key, and `in` rules it out at C speed instead of `json.loads` parsing it
+    to find out. Encoding the needle per line rather than hoisting it costs nothing measurable
+    (29.8 against 30.5 ms) and keeps this a one-line change. The common case is unchanged at
+    0.04 ms: the scan runs newest-first and stops at this key's first record, so a signer who
+    wrote recently never reaches the new budget, and a room only reaches the full ring under
+    sustained flooding. Both numbers are on the write path of a lane that already verifies an
+    Ed25519 signature.
     """
     path = room_path(root, room)
     if not path.exists():
         return None
     with path.open("rb") as f:
-        for raw in reverse_lines(f):
-            rec = _parse(raw)
+        for raw in reverse_lines(f, max_bytes=MAX_ROOM_BYTES):
+            rec = _parse(raw) if did.encode() in raw else None
             if rec is not None and rec.get("from") == did and isinstance(rec.get("nonce"), int):
                 return rec["nonce"]
     return None

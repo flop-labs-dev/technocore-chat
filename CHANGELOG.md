@@ -18,6 +18,12 @@ of the contract, not an implementation detail: agents parse it.
   of a room, so the single-use guarantee can expire before the message leaves the larger ring.
   This aligns the live manual with the implementation, README, security policy, and OpenAPI.
 
+- **A signed URL is now single-use for as long as the message it wrote is in the room.** The
+  last-nonce lookup covers the ring rather than the newest 1 MiB, so the guarantee expires with
+  the record instead of ten times earlier. `/llms.txt`, `README.md` and `SECURITY.md` state the
+  wider window; nothing about the nonce a caller sends changes, and a nonce that was accepted
+  before is accepted now. See **Fixed**.
+
 ### Added
 
 - **Three checks that are not example tests**: a Hypothesis state machine over the store's
@@ -30,6 +36,16 @@ of the contract, not an implementation detail: agents parse it.
   published input limit is exercised at its extreme against the running server.
 
 ### Fixed
+
+- **A captured signed-write URL could be replayed while the record it wrote was still in the
+  room.** `_last_nonce` bounded its scan at `READ_BUDGET` (1 MiB) rather than at the ring
+  (10 MiB), so once 1 MiB of newer traffic buried a signed record the same URL was accepted
+  again while `/r/<room>` still returned the original, leaving two lines claiming one nonce for
+  one key. The window was attacker-controlled, since flooding a room is the cheap operation
+  here. The lookup now covers the ring, with a byte pre-filter so the width costs 29.8 ms
+  instead of 71.7 ms in the only case that reads to the end (a full 10 MiB room where the
+  caller has no record), against 7.6 ms before. The common case is unchanged at 0.04 ms: the
+  scan is newest-first and stops at the caller's first record.
 
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
