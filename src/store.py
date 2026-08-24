@@ -953,25 +953,33 @@ def _walk(d: Path, suffix: str, nested: bool = False) -> Iterator[Path]:
         return  # missing or unreadable: nothing to walk, same as an empty glob
 
 
-def _at_capacity(cap: int, what: str) -> StoreError:
-    """The refusal, in one place because two callers raise it (rooms count both a cap and a
+def _at_capacity(cap: int, what: str, where: str) -> StoreError:
+    """The refusal, in one place because three callers raise it (rooms count both a cap and a
     byte budget). Only *new* names are refused, which is the actionable half: an agent
-    blocked here can always keep working in a room or note it is already using."""
+    blocked here can always keep working in a room or note it is already using.
+
+    `where` is the path that answers "what exists" for the cap that was hit. It is a
+    parameter because it is not the same path for all of them. A room refusal points at
+    `/rooms`. A per-namespace note refusal has to point at `/kv/<ns>`: the note figures in
+    `/rooms` are the global aggregate, deliberately blind to namespaces (see `note_stats`),
+    so they cannot show the count that is full and will usually show plenty of headroom
+    while this namespace is at its cap.
+    """
     return StoreError(
         f"{what} limit reached ({cap} is the cap, and this would be a new one). "
         f"Existing {what}s still accept writes, so reuse one you already have — "
-        f"GET /rooms shows what exists. Idle {what}s are reclaimed after 7 days "
+        f"GET {where} shows what exists. Idle {what}s are reclaimed after 7 days "
         "(a room still on its first message goes after 24 hours)."
     )
 
 
-def _check_capacity(path: Path, suffix: str, cap: int, what: str) -> None:
+def _check_capacity(path: Path, suffix: str, cap: int, what: str, where: str) -> None:
     """Fail closed when a *new* file would exceed the cap. Existing ones always proceed,
     so a full namespace never silences agents already using it."""
     if path.exists():
         return
     if _scan(path.parent, suffix)[0] >= cap:
-        raise _at_capacity(cap, what)
+        raise _at_capacity(cap, what, where)
 
 
 def room_bytes_used(root: Path) -> int:
@@ -1017,7 +1025,7 @@ def _check_room_capacity(path: Path) -> None:
         return
     count, used = _scan(path.parent, ".jsonl", sized=True)
     if count >= MAX_ROOMS:
-        raise _at_capacity(MAX_ROOMS, "room")
+        raise _at_capacity(MAX_ROOMS, "room", "/rooms")
     if used >= MAX_TOTAL_ROOM_BYTES:
         raise StoreError(
             f"room storage is full ({used >> 20} MiB of a {MAX_TOTAL_ROOM_BYTES >> 20} MiB "
@@ -1032,7 +1040,10 @@ def _check_room_capacity(path: Path) -> None:
 def _check_note_capacity(root: Path, path: Path) -> None:
     if path.exists():
         return
-    _check_capacity(path, ".txt", MAX_NOTES_PER_NS, "note")
+    # The per-namespace refusal names this namespace, not /rooms: /rooms carries the global
+    # note aggregate and is blind to namespaces by design, so it is the one surface that
+    # cannot show the count that is full. /kv/<ns> lists exactly the notes this cap counts.
+    _check_capacity(path, ".txt", MAX_NOTES_PER_NS, "note", f"/kv/{path.parent.name}")
     total = 0
     try:
         with os.scandir(root / "notes") as namespaces:

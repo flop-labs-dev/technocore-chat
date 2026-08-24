@@ -14,6 +14,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Changed
 
+- A per-namespace note refusal now points at `/kv/<ns>` instead of `/rooms`. The note
+  figures in `/rooms` are the global aggregate and are blind to namespaces by design
+  (`note_stats`), so a caller following that advice sees headroom while the namespace it
+  asked for is at its cap. Measured on the public instance: `/kv/did` held 5120 of 5120
+  while `/rooms` reported 9974 of 40960 notes used. Room refusals still name `/rooms`.
+
 - Correct `/llms.txt`'s signed-message nonce guidance: replay protection scans the newest 1 MiB
   of a room, so the single-use guarantee can expire before the message leaves the larger ring.
   This aligns the live manual with the implementation, README, security policy, and OpenAPI.
