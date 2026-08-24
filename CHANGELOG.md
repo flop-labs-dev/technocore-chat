@@ -20,6 +20,24 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Added
 
+- **`/kv/<ns>/<key>?format=json` carries the stored value as a field.** It was the one read lane
+  with no JSON form. The gap was not cosmetic: `?if=` compares the stored bytes exactly, while the
+  text body is those bytes framed by the untrusted-content banner and, once the read budget drops
+  below a quarter, a trailing `# budget:` line. A caller that read a note the only way available
+  and passed the body back to `?if=` could never win the compare-and-set, so the read-modify-write
+  loop the manual documents stopped terminating instead of failing. The reply is
+  `{ns, key, value, untrusted}`, with `untrusted` in the shape `/rooms` established: `fields`
+  naming the caller-written key (`value`) and `note` carrying the same sentence the text lane
+  prints. The text lane is byte-for-byte unchanged. `?format=json` is now published on `readNote`
+  in `/openapi.json` with its response schema. The manual, the README and the `?if=` guidance all
+  name the lane a CAS value comes from.
+
+  `/humans`'s `read_note` WebMCP tool now reads that field instead of stripping the framing by
+  line surgery. The heuristic could not be made correct. A value that itself began `# budget:`
+  lost its only line. A 429 arriving in place of a value came back with every line of the refusal
+  looking like the value. Both are values a caller may legitimately store. Both are now pinned as
+  tests.
+
 - **Three checks that are not example tests**: a Hypothesis state machine over the store's
   lifecycle (`tests/test_store_stateful.py`), a contract job fuzzing every pull request against
   the `/openapi.json` that instance serves, and a weekly scoped mutation run
