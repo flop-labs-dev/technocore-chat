@@ -31,6 +31,21 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Fixed
 
+- **A room or note name the grammar refuses is refused for that reason, on every write lane.**
+  A room class is a name *prefix*, so `mb-FOO` carries one while failing `NAME_RE` — the
+  pattern `/openapi.json` publishes on every `room`, `ns` and `key` parameter. Both write
+  gates asked their class questions first, so one write had two answers: `GET /r/mb-FOO` and
+  `/r/mb-FOO/say-signed/…` both said 400, while `/r/mb-FOO/say/bot/hi` said 403 "is a mailbox"
+  and named `say-signed` as the correction — a lane that then 400s. `/kv/room-owners/D-FOO`
+  said 403 "cannot be owned" where `/kv/room-allow/D-FOO` said 400 for the same key. A caller
+  cannot act on the difference between "this room refuses you" and "that name can never exist
+  here" if the server picks the wrong one. Those class refusals also interpolated a segment
+  that had passed no check into a plain-text body the server wrote, and a `{room}`/`{ns}`/
+  `{key}` segment matches a raw newline that `{text:path}` deliberately does not — so a
+  caller could open a line of its own inside a refusal. The names are now validated before
+  any class is consulted, and an invalid one is quoted through `repr` like every other
+  bad-name refusal.
+
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
   both built artifacts use the required archive paths, contain byte-identical legal files, and
