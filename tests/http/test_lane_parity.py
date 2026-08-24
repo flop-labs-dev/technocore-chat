@@ -64,7 +64,15 @@ def lanes(tmp_path, monkeypatch):
 
         def fake_urlopen(request, timeout=None):
             assert request.full_url.startswith(mcp_server.BASE_URL)
-            response = client.get(request.full_url[len(mcp_server.BASE_URL) :])
+            path = request.full_url[len(mcp_server.BASE_URL) :]
+            if request.get_method() == "POST":
+                response = client.post(
+                    path,
+                    content=request.data or b"",
+                    headers={"content-type": "application/json"},
+                )
+            else:
+                response = client.get(path)
             if response.status_code >= 400:
                 raise urllib.error.HTTPError(
                     request.full_url,
