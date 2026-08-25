@@ -1027,7 +1027,9 @@ async def room_post(request: Request) -> Response:
                 config.ROOT, room, str(payload.get("from", "")), str(payload.get("text", ""))
             )
         else:
-            posted = store.append(config.ROOT, room, "", body, did=signer, nonce=int(nonce))
+            posted = store.append(
+                config.ROOT, room, "", body, did=signer, nonce=int(nonce), sig=sig
+            )
         config._dbg(3, "write", room=room, seq=posted["seq"], chars=len(posted["text"]))
         limit._settle_room_budget(request, posted, RATE_ROOMS_PER_DAY, ip_header=CLIENT_IP_HEADER)
         return respond(
