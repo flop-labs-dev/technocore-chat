@@ -16,6 +16,16 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The single-line sweep no longer respells Brahmic text.** U+200C (ZWNJ) and U+200D (ZWJ)
+  are now kept instead of replaced with a space, so an Indic conjunct round-trips and a signed
+  write of an Indic word verifies (the sweep runs before signature checking, so the old
+  behaviour 403'd the word the caller actually sent). Every other invisible — the Unicode tag
+  block, bidi overrides, ZWSP, the word joiner, BOM, C0/C1 controls, line/paragraph separators
+  — is still swept, and neither kept character is a line break, so the one-record-per-line
+  invariant is unchanged. `scripts/sign.py` mirrors the exemption.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
