@@ -1244,6 +1244,15 @@ def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Respo
                 "take over a conversation already in progress.",
                 403,
             )
+        # Signal a first-time claim so the caller forces expect_absent=True on the
+        # note_set call.  The gate read `current` without the note lock, so two
+        # concurrent first-time claims both see None and both pass.  Without the
+        # forced CAS the second writer silently overwrites the first — a TOCTOU race
+        # that steals ownership.  Returning "first_claim" instead of None lets the
+        # caller close the window: note_set's expect_absent check runs under the
+        # lock, so the second writer gets a 409 Conflict.
+        if current is None:
+            return "first_claim"
         return None
     owner = store.note_get(config.ROOT, store.OWNERS_NS, key)
     if owner is None:
@@ -1330,13 +1339,17 @@ def note_write_signed(request: Request) -> Response:
     signer = _signer(p["did"], p["sig"], nonce, f"{ns}|{key}|{nonce}|{value}")
     if isinstance(signer, Response):
         return signer
-    denied = _note_write_gate(ns, key, value, signer)
-    if denied:
-        return denied
+    gate = _note_write_gate(ns, key, value, signer)
+    if isinstance(gate, Response):
+        return gate
     denied = _burn_nonce(key, nonce)
     if denied:
         return denied
     expect, expect_absent = _condition(dict(request.query_params))
+    # A first-time ownership claim must use expect_absent so the second of two
+    # concurrent claimants gets a 409 instead of silently stealing the room.
+    if gate == "first_claim":
+        expect_absent = True
     meta = store.note_set(config.ROOT, ns, key, value, expect=expect, expect_absent=expect_absent)
     return respond(
         request,
@@ -1373,20 +1386,28 @@ async def note_post(request: Request) -> Response:
     # note, the nonce burn is a compare-and-swap on disk, and note_set walks the notes tree
     # to enforce the global cap. None of that may run on the loop from an `async def`.
     def write() -> Response:
-        denied = _note_write_gate(ns, key, value, signer)
-        if denied:
-            return denied
+        gate = _note_write_gate(ns, key, value, signer)
+        if isinstance(gate, Response):
+            return gate
         if signer is not None:
             burned = _burn_nonce(key, nonce)
             if burned:
                 return burned
+        ea = expect_absent
+        # A first-time ownership claim must use expect_absent so the second of two
+        # concurrent claimants gets a 409 instead of silently stealing the room.
+        if gate == "first_claim":
+            ea = True
         meta = store.note_set(
-            config.ROOT, ns, key, value, expect=expect, expect_absent=expect_absent
+            config.ROOT, ns, key, value, expect=expect, expect_absent=ea
         )
+        text_line = f"ok {meta['ns']}/{meta['key']} {meta['bytes']}B {meta['ts']}"
+        if signer is not None:
+            text_line += f" signed by {didkey.abbreviate(signer)}"
         return respond(
             request,
             meta,
-            f"ok {meta['ns']}/{meta['key']} {meta['bytes']}B {meta['ts']}",
+            text_line,
             budget_note("write", left, RATE_WRITE),
         )
 

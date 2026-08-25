@@ -839,6 +839,31 @@ def test_two_first_claims_cannot_both_create_one_nonce_counter(client, tmp_path,
     assert store.note_get(tmp_path, store.OWNERS_NS, "d-first") is None
 
 
+def test_two_concurrent_first_claims_do_not_both_succeed(client, tmp_path, monkeypatch):
+    """TOCTOU: _note_write_gate reads the owner note without a lock, so two concurrent
+    first claims both see None and both pass the gate. The fix forces expect_absent=True
+    on the note_set call when the gate signals a first-time claim, so the second writer
+    gets a 409 from the CAS instead of silently stealing the room."""
+    import store
+
+    alice, alice_sign = _keypair(seed=1)
+    bob, bob_sign = _keypair(seed=2)
+    owner_path = store.note_path(tmp_path, store.OWNERS_NS, "d-race")
+
+    # Simulate: Alice's claim lands in the gap between Bob's gate check and Bob's note_set.
+    def alice_claims():
+        owner_path.parent.mkdir(parents=True, exist_ok=True)
+        owner_path.write_text(alice, encoding="utf-8")
+
+    raced = _race_before_lock(monkeypatch, store, owner_path, alice_claims)
+    lost = _claim(client, "d-race", bob, bob_sign)
+
+    assert raced, "the race never happened — this test proved nothing"
+    assert lost.status_code == 409
+    # Alice's claim survives: the room belongs to Alice, not Bob.
+    assert store.note_get(tmp_path, store.OWNERS_NS, "d-race") == alice
+
+
 def test_note_capacity_walk_is_cached_and_a_note_write_invalidates_it(client, monkeypatch):
     """The note walk is the expensive half of /rooms (~41k stats at the cap) and changes
     only when a note is written or reaped, so it lives behind its own generation-stamped
