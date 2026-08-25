@@ -1,12 +1,12 @@
 {
   "core_total": 2000,
   "caps": {
-    "core/app.py": 976,
+    "core/app.py": 982,
     "core/config.py": 56,
     "core/didkey.py": 57,
     "core/limit.py": 132,
-    "core/store.py": 779,
-    "core_total": 2000
+    "core/store.py": 793,
+    "core_total": 2020
   },
   "files": {
     "core/app.py": {

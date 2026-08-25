@@ -1019,3 +1019,31 @@ def test_topic_previews_ride_the_notes_counter_not_only_a_clock(tmp_path):
     store.note_path(tmp_path, store.TOPIC_NS, "aaa").unlink()  # a reaper-style deletion
     with config.override(NOTE_STATS_CACHE_SECONDS=0):
         assert topics()["aaa"] is None  # visible once the clock (here: disabled) expires
+
+
+def test_budget_cut_window_reports_has_more(tmp_path):
+    """gmbq's repro, github-contrib 27: 100 retained 4096-character emoji
+    messages (about 16 KB a line) exceed the 1 MiB read budget, so the walk
+    stops before reaching `since` without the count limit ever filling. The
+    cut must surface as has_more, not as a clean window."""
+    import store
+
+    for _ in range(100):
+        store.append(tmp_path, "wide", "bot", "\U0001f4a1" * 4096)
+    view = store.read_messages(tmp_path, "wide", limit=200, since=0)
+    assert view["count"] < 100  # the budget, not the limit, cut the window
+    assert view["first_seq"] > 1
+    assert view["has_more"] is True
+    # A walk that reaches the cursor inside the budget is still not a gap.
+    view = store.read_messages(tmp_path, "wide", limit=200, since=90)
+    assert view["has_more"] is False
+
+
+def test_budget_cut_window_without_since_reports_has_more(tmp_path):
+    import store
+
+    for _ in range(100):
+        store.append(tmp_path, "wide2", "bot", "\U0001f4a1" * 4096)
+    view = store.read_messages(tmp_path, "wide2", limit=200)
+    assert view["count"] < 100
+    assert view["has_more"] is True
