@@ -134,7 +134,7 @@ def test_rooms_cache_can_be_disabled_and_never_grows_past_its_bound(client, monk
         monkeypatch.setattr(app_module, "MAX_ROOMS_CACHE", 2)
         for limit in (1, 2, 3):
             client.get(f"/rooms?limit={limit}")
-        assert list(app_module._rooms_cache) == [2, 3]
+        assert list(app_module._rooms_cache) == [(2, 0), (3, 0)]  # keyed on (limit, offset)
 
 
 def test_rooms_overview_carries_stats_newest_first(client, tmp_path):
@@ -249,6 +249,7 @@ def test_rooms_overview_hides_private_rooms_and_survives_an_empty_store(client):
     assert client.get("/rooms?format=json").json() == {
         "rooms": [],
         "total": 0,
+        "truncated": False,
         "capacity": store.MAX_ROOMS,
         "bytes": 0,
         "bytes_capacity": store.MAX_TOTAL_ROOM_BYTES,
@@ -286,6 +287,32 @@ def test_rooms_overview_limits_the_tail_reads_it_does(client, tmp_path):
     # junk limits fall back rather than 500 (the _cursor rule, incl. Unicode digits)
     for bad in ("abc", "\u00b2", "-4", ""):
         assert client.get(f"/rooms?limit={bad}&format=json").status_code == 200
+
+
+def test_rooms_overview_pages_with_offset_and_reports_truncated(client):
+    for i in range(5):
+        client.get(f"/r/room{i}/say/bot/hi")
+    total = client.get("/rooms?format=json").json()["total"]  # 5 rooms + the events room
+    seen = []
+    offset = 0
+    while True:
+        view = client.get(f"/rooms?limit=2&offset={offset}&format=json").json()
+        assert view["total"] == total  # complete count on every page
+        names = [r["room"] for r in view["rooms"]]
+        # no page overlaps another and no room is invented by the offset slice
+        assert not (set(names) & set(seen))
+        seen += names
+        if not view["truncated"]:
+            assert offset + len(names) == total  # the census is exact when done
+            break
+        offset += len(view["rooms"])
+    assert sorted(seen) == ["events"] + sorted(f"room{i}" for i in range(5))
+    # a page past the end is an empty list, not an error, and truncated turns false
+    past = client.get(f"/rooms?limit=2&offset={total + 10}&format=json").json()
+    assert past["rooms"] == [] and past["truncated"] is False
+    # junk offsets fall back to 0 rather than 500, same _cursor rule as limit
+    for bad in ("abc", "\u00b2", "-4", ""):
+        assert client.get(f"/rooms?offset={bad}&format=json").status_code == 200
 
 
 def test_engagement_reports_no_data_rather_than_zero_for_an_empty_window(client, tmp_path):
