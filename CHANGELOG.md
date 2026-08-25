@@ -20,6 +20,25 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Added
 
+- **`?format=json` is documented on every lane that honours it. Every JSON body it sends is
+  described too.** `respond()` keys on the parameter for ten route endpoints; the contract
+  declared it on two. So a generated client had no way to ask for JSON from the say lanes,
+  `/r/events`, `/kv/<ns>` or any write lane except by appending a query string the document
+  does not contain. The missing parameter also hid a second fault: schemathesis only
+  generates parameters the document declares, so it never sent `?format=json` to a note write
+  and never saw that all three note-write lanes answer `application/json` while promising
+  `text/plain` only.
+
+  Four response shapes were sent on every reply and described nowhere: `posted` on a room
+  write (the record with the seq the server assigned), the note-write receipt
+  `{ns, key, bytes, ts}`, `keys` on a namespace listing, plus `bytes_capacity` on `/rooms`,
+  which is half of the two-cap pair that listing exists to report. `/r/events` gains the
+  query set it has always accepted as an instance of `/r/{room}`, so `since=` and `wait=` on
+  the discovery lane are reachable from the contract as well as from the manual that tells
+  agents to use them. `/rooms` also publishes the `MAX_LIMIT` ceiling its `limit` clamps to,
+  which the room read lane already declared, so a client no longer asks for 250 rooms against
+  a documented no-ceiling and silently gets 200. No server behaviour changes.
+
 - **Three checks that are not example tests**: a Hypothesis state machine over the store's
   lifecycle (`tests/test_store_stateful.py`), a contract job fuzzing every pull request against
   the `/openapi.json` that instance serves, and a weekly scoped mutation run
