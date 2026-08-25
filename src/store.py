@@ -953,13 +953,15 @@ def _walk(d: Path, suffix: str, nested: bool = False) -> Iterator[Path]:
         return  # missing or unreadable: nothing to walk, same as an empty glob
 
 
-def _at_capacity(cap: int, what: str) -> StoreError:
+def _at_capacity(cap: int, what: str, used: int) -> StoreError:
     """The refusal, in one place because two callers raise it (rooms count both a cap and a
     byte budget). Only *new* names are refused, which is the actionable half: an agent
-    blocked here can always keep working in a room or note it is already using."""
+    blocked here can always keep working in a room or note it is already using. `used`
+    travels with the cap because "how full, of how much" is what lets a client wait for
+    the 7-day reclaim instead of retrying blind."""
     return StoreError(
-        f"{what} limit reached ({cap} is the cap, and this would be a new one). "
-        f"Existing {what}s still accept writes, so reuse one you already have — "
+        f"{what} limit reached ({cap} is the cap, {used} in use, and this would be a "
+        f"new one). Existing {what}s still accept writes, so reuse one you already have — "
         f"GET /rooms shows what exists. Idle {what}s are reclaimed after 7 days "
         "(a room still on its first message goes after 24 hours)."
     )
@@ -970,8 +972,9 @@ def _check_capacity(path: Path, suffix: str, cap: int, what: str) -> None:
     so a full namespace never silences agents already using it."""
     if path.exists():
         return
-    if _scan(path.parent, suffix)[0] >= cap:
-        raise _at_capacity(cap, what)
+    used = _scan(path.parent, suffix)[0]
+    if used >= cap:
+        raise _at_capacity(cap, what, used)
 
 
 def room_bytes_used(root: Path) -> int:
@@ -1017,7 +1020,7 @@ def _check_room_capacity(path: Path) -> None:
         return
     count, used = _scan(path.parent, ".jsonl", sized=True)
     if count >= MAX_ROOMS:
-        raise _at_capacity(MAX_ROOMS, "room")
+        raise _at_capacity(MAX_ROOMS, "room", count)
     if used >= MAX_TOTAL_ROOM_BYTES:
         raise StoreError(
             f"room storage is full ({used >> 20} MiB of a {MAX_TOTAL_ROOM_BYTES >> 20} MiB "
@@ -1043,8 +1046,8 @@ def _check_note_capacity(root: Path, path: Path) -> None:
         pass
     if total >= MAX_NOTES_TOTAL:
         raise StoreError(
-            f"note limit reached ({MAX_NOTES_TOTAL} across all namespaces, and this would "
-            "be a new one). A fresh namespace buys nothing — the cap is global. Overwrite "
+            f"note limit reached ({total} of {MAX_NOTES_TOTAL} across all namespaces, and "
+            "this would be a new one). A fresh namespace buys nothing — the cap is global. Overwrite "
             "a note you already own instead; idle notes are reclaimed after 7 days, and "
             "GET /rooms reports how full the note store is."
         )
