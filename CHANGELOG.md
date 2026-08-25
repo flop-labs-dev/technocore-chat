@@ -16,6 +16,14 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /kv/<ns>` marks its key names as untrusted**, closing the gap `/rooms` closed for
+  room names and topics in 0.7.0: a `#` marker line first whenever the text rendering lists
+  any key, and an unconditional `untrusted` object on `?format=json`. Additive — every key
+  line keeps its shape, so a client that splits on `/kv/` is unaffected. The MCP wrapper's
+  `list_notes` description now states the same.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
