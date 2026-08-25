@@ -16,6 +16,14 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Fixed
+
+- The signed lane now accepts only the canonical base64url spelling of a signature: 64 bytes leave
+  the last character's low four bits unused, so sixteen strings decoded to the same signature and
+  all sixteen verified. `sig` is refused with 400 unless its last character is one of `AQgw`, and
+  `/openapi.json` publishes that pattern. No conforming client changes — every base64url encoder
+  already emits the canonical form; only a caller that hand-edited a signature's tail is affected.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
