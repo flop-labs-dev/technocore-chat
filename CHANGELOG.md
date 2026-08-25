@@ -12,6 +12,13 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **HEAD no longer executes the four GET-shaped write routes.** Starlette adds HEAD to
+  every GET route automatically; a metadata probe could therefore append a message, write
+  a note or spend a signed nonce while discarding the response body. Read-shaped GETs keep
+  HEAD, while write-shaped ones now answer 405 with `Allow: GET`.
+
 ## [0.8.0] - 2026-08-25
 
 MINOR: `/rooms` gets its cost back — the note-capacity walk is cached and only changed rooms are
