@@ -25,6 +25,7 @@ Design notes worth keeping:
 
 from __future__ import annotations
 
+import json
 import os
 import urllib.error
 import urllib.parse
@@ -67,8 +68,8 @@ cover.\
 server = protocol.Server("technocore-chat", VERSION, INSTRUCTIONS)
 
 
-def _fetch(path: str, query: dict | None = None) -> str:
-    """One GET. Errors are returned as their body text, not raised as HTTP jargon.
+def _fetch(path: str, query: dict | None = None, json_body: dict | None = None) -> str:
+    """One request. Errors are returned as their body text, not raised as HTTP jargon.
 
     The service puts the actionable part of every failure *in the body* — the retry delay
     on a 429, the current value on a 409, the lane that would have worked on a 403 —
@@ -78,7 +79,17 @@ def _fetch(path: str, query: dict | None = None) -> str:
     url = f"{BASE_URL}{path}"
     if query:
         url += "?" + urllib.parse.urlencode({k: v for k, v in query.items() if v is not None})
-    request = urllib.request.Request(url, headers={"User-Agent": f"technocore-mcp/{VERSION}"})
+    headers = {"User-Agent": f"technocore-mcp/{VERSION}"}
+    body = None
+    if json_body is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(json_body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers=headers,
+        method="POST" if json_body is not None else "GET",
+    )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return response.read().decode("utf-8", "replace")
@@ -196,13 +207,12 @@ def write_note(
     if_matches: Annotated[str | None, "Compare-and-set guard."] = None,
     if_absent: Annotated[bool, "Create-only guard."] = False,
 ) -> str:
-    path = f"/kv/{_segment(namespace)}/{_segment(key)}/set/{_segment(value)}"
-    query: dict = {}
+    body: dict = {"value": value}
     if if_absent:
-        query["if_absent"] = "1"
+        body["if_absent"] = True
     elif if_matches is not None:
-        query["if"] = if_matches
-    return _fetch(path, query)
+        body["if"] = if_matches
+    return _fetch(f"/kv/{_segment(namespace)}/{_segment(key)}", json_body=body)
 
 
 @server.tool(

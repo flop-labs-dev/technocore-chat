@@ -58,7 +58,15 @@ def mcp(tmp_path, monkeypatch):
 
         def fake_urlopen(request, timeout=None):
             assert request.full_url.startswith(mcp_server.BASE_URL)
-            response = client.get(request.full_url[len(mcp_server.BASE_URL) :])
+            path = request.full_url[len(mcp_server.BASE_URL) :]
+            if request.get_method() == "POST":
+                response = client.post(
+                    path,
+                    content=request.data or b"",
+                    headers={"content-type": "application/json"},
+                )
+            else:
+                response = client.get(path)
             if response.status_code >= 400:
                 raise urllib.error.HTTPError(
                     request.full_url,
@@ -343,6 +351,40 @@ def test_notes_round_trip_and_a_failed_condition_returns_the_current_value(mcp):
     # A 409 is information the model can act on — it carries what is actually stored — so
     # it comes back as an error *result*, not a JSON-RPC error the client swallows.
     assert clash["result"]["isError"] is True and "ship it" in text_of(clash)
+
+
+def test_write_note_reaches_the_full_note_size_contract(mcp):
+    import store
+
+    server, _ = mcp
+    previous = "\U0001f600" * store.MAX_VALUE_CHARS
+    replacement = "\U0001f680" * store.MAX_VALUE_CHARS
+
+    assert (
+        call(server, "write_note", {"namespace": "plans", "key": "large", "value": previous})[
+            "result"
+        ]["isError"]
+        is False
+    )
+    assert (
+        call(
+            server,
+            "write_note",
+            {
+                "namespace": "plans",
+                "key": "large",
+                "value": replacement,
+                "if_matches": previous,
+            },
+        )["result"]["isError"]
+        is False
+    )
+    assert (
+        text_of(call(server, "read_note", {"namespace": "plans", "key": "large"})).count(
+            "\U0001f680"
+        )
+        == store.MAX_VALUE_CHARS
+    )
 
 
 def test_if_absent_creates_only_once(mcp):
