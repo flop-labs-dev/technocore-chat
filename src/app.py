@@ -28,6 +28,8 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 from starlette.routing import Match, Route
 
+
+from enum import Enum
 import config
 import didkey
 import limit
@@ -1175,7 +1177,12 @@ def _condition(source: dict) -> tuple[str | None, bool]:
     return (str(expect) if expect is not None else None), False
 
 
-def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Response | None:
+class _GatePass(Enum):
+    ALLOWED = "allowed"
+
+    FIRST_CLAIM = "first_claim"
+
+def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Response | _GatePass:
     """Two reserved namespaces carry room ownership, and only those two take signed writes.
 
     Not a general signed-kv system: a note is world-writable by design and stays that way,
@@ -1198,7 +1205,7 @@ def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Respo
                 f"/kv/{ns}/{key}/set/<value>.",
                 400,
             )
-        return None
+        return _GatePass.ALLOWED
     if ns == store.OWNERS_NS:
         if not store.ownable(key):
             return text(
@@ -1252,8 +1259,8 @@ def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Respo
         # caller close the window: note_set's expect_absent check runs under the
         # lock, so the second writer gets a 409 Conflict.
         if current is None:
-            return "first_claim"
-        return None
+            return _GatePass.FIRST_CLAIM
+        return _GatePass.ALLOWED
     owner = store.note_get(config.ROOT, store.OWNERS_NS, key)
     if owner is None:
         return text(
@@ -1276,7 +1283,7 @@ def _note_write_gate(ns: str, key: str, value: str, signer: str | None) -> Respo
             "is not one. Fail closed: a list with an unparseable entry lets nobody in.",
             400,
         )
-    return None
+    return _GatePass.ALLOWED
 
 
 def note_write(request: Request) -> Response:
@@ -1285,9 +1292,9 @@ def note_write(request: Request) -> Response:
         return limit.limited("write", RATE_WRITE, retry, text=text, max_wait=MAX_WAIT)
     p = request.path_params
     value = store.clean_text(p["value"], store.MAX_VALUE_CHARS)
-    denied = _note_write_gate(p["ns"], p["key"], value, None)
-    if denied:
-        return denied
+    gate = _note_write_gate(p["ns"], p["key"], value, None)
+    if isinstance(gate, Response):
+        return gate
     expect, expect_absent = _condition(dict(request.query_params))
     meta = store.note_set(
         config.ROOT, p["ns"], p["key"], value, expect=expect, expect_absent=expect_absent
@@ -1348,7 +1355,7 @@ def note_write_signed(request: Request) -> Response:
     expect, expect_absent = _condition(dict(request.query_params))
     # A first-time ownership claim must use expect_absent so the second of two
     # concurrent claimants gets a 409 instead of silently stealing the room.
-    if gate == "first_claim":
+    if gate is _GatePass.FIRST_CLAIM:
         expect_absent = True
     meta = store.note_set(config.ROOT, ns, key, value, expect=expect, expect_absent=expect_absent)
     return respond(
@@ -1396,7 +1403,7 @@ async def note_post(request: Request) -> Response:
         ea = expect_absent
         # A first-time ownership claim must use expect_absent so the second of two
         # concurrent claimants gets a 409 instead of silently stealing the room.
-        if gate == "first_claim":
+        if gate is _GatePass.FIRST_CLAIM:
             ea = True
         meta = store.note_set(
             config.ROOT, ns, key, value, expect=expect, expect_absent=ea
