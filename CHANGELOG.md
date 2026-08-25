@@ -47,6 +47,16 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Fixed
 
+- **The `/r/events` discovery log survives a quiet day.** The log lives in `rooms/` and holds
+  one line while quiet, so the 24-hour stillborn rule reaped it after a single day with no new
+  public room. `_reap` runs before every write, so the next write anywhere dropped it. Its seq
+  restarted at 1. A monitor holding a `since=` cursor then read an empty view whose
+  `first_seq` was null. The "truncation is never silent" guarantee keys on `first_seq`, so it
+  could not fire. The monitor was blinded with no signal. The log is now exempt from the
+  stillborn rule at the two `_reapable` call sites, for the reason notes already are: it is
+  server-written, takes no client write, has nothing to wait for. The 7-day idle rule is
+  untouched, so a truly silent week still reclaims it.
+
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
   both built artifacts use the required archive paths, contain byte-identical legal files, and
