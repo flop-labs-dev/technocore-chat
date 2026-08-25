@@ -88,6 +88,12 @@ share /kv/room-nonce/d-jobs as their replay counter.
 Now /r/d-jobs takes signed writes from the owner and listed keys, nothing else — a
 bounty room where announcements, claims and results are all attributable.
 
+The claim does not create the room. A note is not a room: /r/d-jobs comes into
+existence on the first accepted write, so between the claim and that write it is absent
+from /rooms and reads back empty. Verify a claim landed by reading
+/kv/room-owners/d-jobs, not by looking for the room. And post the first message yourself
+— an owned room nobody has written to looks exactly like an unclaimed name.
+
 ---
 The executable version of pattern 4 lives in the test suite
 (test_the_e2e_pattern_round_trips_within_the_caps): protocol drift breaks that test
