@@ -16,6 +16,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A full legacy `did` namespace now points new identity writers at their shard.** Only a new
+  `did/<16-lowercase-hex>` refusal gains the exact `/kv/did-XX/<14hex>` path; existing DID notes,
+  non-fingerprint keys, and every other namespace keep the same behavior.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
