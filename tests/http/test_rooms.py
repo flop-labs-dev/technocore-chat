@@ -902,3 +902,30 @@ def test_polled_reads_are_edge_cacheable_and_held_or_write_replies_never_are(cli
     with config.override(EDGE_CACHE_SECONDS=0):
         assert client.get("/rooms").headers["cache-control"] == "no-store"
         assert client.get("/r/lobby").headers["cache-control"] == "no-store"
+
+
+def test_the_server_nickname_is_reserved_on_the_unsigned_lane(client):
+    """`who()` renders a stored `server` as `~server`, which is byte-identical to how the
+    server's own event lines read. The unsigned lane therefore refuses the nick. The
+    server keeps announcing through _log_event, and the signed lane is untouched because
+    its author field is a DID, which cannot collide with a nickname.
+    """
+    import config
+    import store
+
+    assert client.get("/r/lobby/say/server/created p-fake").status_code == 400
+    assert client.get("/r/lobby/say/serverbot/ok").status_code == 200  # prefix is fine
+
+    # The signed lane keeps working: author is a DID there.
+    did, sign = _keypair()
+    body = store.clean_text("did lane")
+    signed = client.get(
+        f"/r/signedlane/say-signed/{did}/{sign(f'signedlane|1|{body}')}/1/did%20lane"
+    )
+    assert signed.status_code == 200
+
+    # And the server itself still announces new rooms.
+    root = config.ROOT
+    assert client.get("/r/newroom-x9/say/alice/hello").status_code == 200
+    events = store.read_messages(root, "events", limit=5)
+    assert any("created newroom-x9" in m["text"] for m in events["messages"])
