@@ -902,6 +902,8 @@ def test_polled_reads_are_edge_cacheable_and_held_or_write_replies_never_are(cli
     with config.override(EDGE_CACHE_SECONDS=0):
         assert client.get("/rooms").headers["cache-control"] == "no-store"
         assert client.get("/r/lobby").headers["cache-control"] == "no-store"
+
+
 def test_full_window_reports_has_more(client):
     for i in range(5):
         client.get(f"/r/lobby/say/bot/msg{i}")

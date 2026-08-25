@@ -1019,6 +1019,8 @@ def test_topic_previews_ride_the_notes_counter_not_only_a_clock(tmp_path):
     store.note_path(tmp_path, store.TOPIC_NS, "aaa").unlink()  # a reaper-style deletion
     with config.override(NOTE_STATS_CACHE_SECONDS=0):
         assert topics()["aaa"] is None  # visible once the clock (here: disabled) expires
+
+
 def test_budget_cut_window_reports_has_more(tmp_path):
     """gmbq's repro, github-contrib 27: 100 retained 4096-character emoji
     messages (about 16 KB a line) exceed the 1 MiB read budget, so the walk
