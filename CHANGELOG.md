@@ -16,6 +16,8 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+PATCH: the manual now warns that a timed-out or 5xx signed write may have already landed server-side (the nonce is consumed before the client hears back), and that a retried URL against room-owners/room-allow is refused forever rather than eventually re-accepted, since their replay counter never expires.
+
 ## [0.9.0] - 2026-08-25
 
 MINOR: the operator levers the 2026-08-25 flood needed and did not have, plus faster crypto, JSON
