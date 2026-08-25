@@ -442,7 +442,7 @@ def read_messages(root: Path, room: str, limit: int = 50, since: int | None = No
     # advancing past records nobody can read any more, or an expired room would reuse seqs.
     cutoff = _cutoff(room)
     out: list[dict] = []
-    if path.exists():
+    try:
         with path.open("rb") as f:
             for raw in reverse_lines(f):
                 rec = _parse(raw)
@@ -455,6 +455,8 @@ def read_messages(root: Path, room: str, limit: int = 50, since: int | None = No
                 out.append(rec)
                 if len(out) >= limit:
                     break
+    except FileNotFoundError:
+        pass  # the reaper won between resolving the room and opening it
     out.reverse()
     return {
         "room": room,
@@ -467,13 +469,14 @@ def read_messages(root: Path, room: str, limit: int = 50, since: int | None = No
 
 def last_seq(root: Path, room: str) -> int:
     path = room_path(root, room)
-    if not path.exists():
-        return 0
-    with path.open("rb") as f:
-        for raw in reverse_lines(f, max_bytes=65536):
-            rec = _parse(raw)
-            if rec is not None:
-                return rec["seq"]
+    try:
+        with path.open("rb") as f:
+            for raw in reverse_lines(f, max_bytes=65536):
+                rec = _parse(raw)
+                if rec is not None:
+                    return rec["seq"]
+    except FileNotFoundError:
+        pass  # a concurrent reap makes the room empty, not exceptional
     return 0
 
 
@@ -499,7 +502,7 @@ def room_window(root: Path, room: str) -> tuple[int, list[str]]:
     nicks: list[str] = []
     top = 0
     path = room_path(root, room)
-    if path.exists():
+    try:
         with path.open("rb") as f:
             for raw in reverse_lines(f, max_bytes=WINDOW_BYTES):
                 rec = _parse(raw)
@@ -510,6 +513,8 @@ def room_window(root: Path, room: str) -> tuple[int, list[str]]:
                 nicks.append(str(rec.get("from", "")))
                 if len(nicks) >= WINDOW_MESSAGES:
                     break
+    except FileNotFoundError:
+        pass  # room_stats tolerates a room reaped after its directory scan
     return top, nicks
 
 
@@ -1312,7 +1317,10 @@ def note_set(
 
 def note_get(root: Path, ns: str, key: str) -> str | None:
     path = note_path(root, ns, key)
-    return path.read_text(encoding="utf-8") if path.exists() else None
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None  # note reads race safely with the reaper's atomic unlink
 
 
 def topic(root: Path, room: str) -> str | None:
