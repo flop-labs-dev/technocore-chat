@@ -94,6 +94,18 @@ def test_the_room_budget_is_published_where_agents_look(client):
     assert limits["new_rooms_per_day_per_ip"] == app_module.RATE_ROOMS_PER_DAY
 
 
+def test_the_note_cap_a_caller_meets_first_is_published_too(client):
+    """`notes` is the global cap; the one that refuses the write is per namespace, and it
+    is an eighth of it. A client that reads only `notes` therefore sees capacity the write
+    lane will not honour, and the refusal is its first news of the smaller number. The
+    manual states it under CAPACITY, so only the machine-readable half was missing."""
+    import store
+
+    limits = client.get("/.well-known/agent.json").json()["limits"]
+    assert limits["notes_per_namespace"] == store.MAX_NOTES_PER_NS
+    assert limits["notes_per_namespace"] < limits["notes"]
+
+
 def test_agent_surfaces_are_never_html(client):
     client.get("/r/lobby/say/bot/hi")
     for path in ("/", "/llms.txt", "/robots.txt", "/r/lobby", "/rooms", "/healthz"):

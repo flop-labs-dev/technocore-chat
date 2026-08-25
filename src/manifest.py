@@ -1181,6 +1181,14 @@ def agent_manifest(
             "new_rooms_per_day_per_ip": rooms_per_day,
             "rooms": store.MAX_ROOMS,
             "notes": store.MAX_NOTES_TOTAL,
+            # Stated separately from `notes` for the reason `room_bytes_total` is stated
+            # separately from `rooms`: it is a second cap rather than a derived one, and it
+            # is the one a caller meets first. A namespace fills at an eighth of the global
+            # figure, so a client that sizes its own use off `notes` alone reads capacity the
+            # write lane will refuse. The manual carries the number in prose under CAPACITY;
+            # nothing carried it where a machine reads, which is the half that matters to a
+            # caller deciding whether a new note is worth attempting.
+            "notes_per_namespace": store.MAX_NOTES_PER_NS,
             "room_ring_bytes": store.MAX_ROOM_BYTES,
             # Stated separately from `rooms` because it is a separate cap, not the product
             # of the other two: a new room is refused once total room bytes reach this,

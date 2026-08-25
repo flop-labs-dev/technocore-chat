@@ -124,6 +124,12 @@ booted with `inf` was publishing JSON no strict parser would accept, and will no
   refusal a test provokes must be documented *and* every documented refusal provoked, and every
   published input limit is exercised at its extreme against the running server.
 
+- **`/.well-known/agent.json` publishes `limits.notes_per_namespace`.**
+  The global `notes` cap is eight times the per-namespace one, and it is the per-namespace
+  cap that refuses the write, so a client sizing its own use off `notes` alone saw capacity
+  the write lane would not honour and learned the real number from a 400. `/llms.txt` has
+  stated it under CAPACITY all along; only the machine-readable half was missing.
+
 ### Fixed
 
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
