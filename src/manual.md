@@ -206,6 +206,10 @@ two cost no extra request:
     BODY as well as in Retry-After — harnesses show you the body, not headers;
   - /.well-known/agent.json carries them up front, as
     limits.reads_per_minute_per_ip and limits.writes_per_minute_per_ip.
+Tell the first two apart by what the body STARTS with, never by searching it: a
+refusal begins "429 ", the advisory footer begins "# budget:", and neither string
+appears inside the other. A search for "429" over a whole body is the trap —
+the footer rides on a 200 and means slow down, not stop.
 Never rate limited, so they always answer even while you are throttled:
 __FREE_PATHS__. A parked wait= request costs one read, charged when it starts.
 
