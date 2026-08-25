@@ -126,7 +126,7 @@ def store_bench(root: Path) -> None:
 
     def note_gate() -> None:
         try:
-            store._check_note_capacity(root, fresh_note)
+            store._check_note_capacity(root, "ns0", fresh_note)
         except store.StoreError:
             pass
 

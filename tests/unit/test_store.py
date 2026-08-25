@@ -168,7 +168,9 @@ def test_a_capacity_refusal_carries_the_numbers_a_caller_acts_on(tmp_path, monke
     # Two note caps, two messages, and the number is the actionable part of both.
     monkeypatch.setattr(store, "MAX_NOTES_PER_NS", 1)
     store.note_set(tmp_path, "plans", "only", "hi")
-    with pytest.raises(store.StoreError, match=r"note limit reached \(1 is the cap"):
+    with pytest.raises(
+        store.StoreError, match=r"namespace `plans`'s note limit reached \(1 is the cap"
+    ):
         store.note_set(tmp_path, "plans", "second", "hi")
 
     monkeypatch.setattr(store, "MAX_NOTES_PER_NS", 10_000)
@@ -272,8 +274,8 @@ def test_note_cap_holds_under_concurrent_creates(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "MAX_NOTES_TOTAL", 4)
     real_check = store._check_note_capacity
 
-    def slow_check(root, path):
-        real_check(root, path)
+    def slow_check(root, ns, path):
+        real_check(root, ns, path)
         time.sleep(0.02)  # widen the count→write window every racer must lose
 
     monkeypatch.setattr(store, "_check_note_capacity", slow_check)
@@ -1019,3 +1021,36 @@ def test_topic_previews_ride_the_notes_counter_not_only_a_clock(tmp_path):
     store.note_path(tmp_path, store.TOPIC_NS, "aaa").unlink()  # a reaper-style deletion
     with config.override(NOTE_STATS_CACHE_SECONDS=0):
         assert topics()["aaa"] is None  # visible once the clock (here: disabled) expires
+
+
+def test_full_namespace_names_itself_and_points_at_kv_not_rooms(tmp_path, monkeypatch):
+    """#145: hitting a full `did` namespace used to say "note limit reached" with no
+    namespace named, and pointed callers at GET /rooms -- which lists rooms, not notes,
+    and never told anyone what /kv/did actually holds."""
+    import store
+
+    monkeypatch.setattr(store, "MAX_NOTES_PER_NS", 1)
+    store.note_set(tmp_path, "did", "existing-fingerprint", "profile data")
+    with pytest.raises(store.StoreError) as excinfo:
+        store.note_set(tmp_path, "did", "new-fingerprint", "profile data")
+
+    message = str(excinfo.value)
+    assert "namespace `did`" in message
+    assert "GET /kv/did" in message
+    assert "GET /rooms" not in message
+
+
+def test_room_capacity_message_is_unchanged_by_the_namespace_addition(tmp_path, monkeypatch):
+    """The room cap shares `_at_capacity` with notes -- ns=None there must still produce
+    the original room wording, unqualified by a namespace it doesn't have."""
+    import store
+
+    monkeypatch.setattr(store, "MAX_ROOMS", 1)
+    store.append(tmp_path, "only", "bot", "hi")
+    with pytest.raises(store.StoreError) as excinfo:
+        store.append(tmp_path, "second", "bot", "hi")
+
+    message = str(excinfo.value)
+    assert message.startswith("room limit reached (1 is the cap")
+    assert "GET /rooms shows what exists" in message
+    assert "namespace `" not in message
