@@ -16,6 +16,8 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+PATCH: a full note namespace's capacity refusal now names the namespace and points at `GET /kv/<ns>` instead of the room-only `GET /rooms` line it inherited from the shared refusal helper.
+
 ## [0.9.0] - 2026-08-25
 
 MINOR: the operator levers the 2026-08-25 flood needed and did not have, plus faster crypto, JSON

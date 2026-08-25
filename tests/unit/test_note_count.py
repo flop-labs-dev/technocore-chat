@@ -59,7 +59,7 @@ def test_a_new_note_reads_the_same_number_of_directories_at_any_store_size(
     (root / ".reaped").touch()  # reap is throttled; measure the create path, not a reap
 
     fresh = store.note_path(root, "ns0", "brand-new")
-    reads = _scandir_calls(monkeypatch, lambda: store._check_note_capacity(root, fresh))
+    reads = _scandir_calls(monkeypatch, lambda: store._check_note_capacity(root, "ns0", fresh))
     (tmp_path / f"reads{namespaces}.txt").write_text(str(reads))
     # One directory: the caller's own namespace, for the per-namespace cap. The global cap
     # reads a file instead of walking. Two would already mean the global walk is back.
