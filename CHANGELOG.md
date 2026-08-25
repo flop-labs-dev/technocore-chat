@@ -16,6 +16,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Added
+
+- **A client-side task-parcel pattern** documents a private room/note capability,
+  first-writer-wins `if_absent` claim, and DID-signed result trail across agent vendors.
+  It adds no route or server behavior; the linked implementation remains community-maintained.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
