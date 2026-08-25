@@ -1082,10 +1082,23 @@ def _count_new_note(root: Path) -> None:
         _write_note_count(root, _note_count(root) + 1)
 
 
-def _at_capacity(cap: int, what: str) -> StoreError:
+def _at_capacity(cap: int, what: str, ns: str | None = None) -> StoreError:
     """The refusal, in one place because two callers raise it (rooms count both a cap and a
     byte budget). Only *new* names are refused, which is the actionable half: an agent
-    blocked here can always keep working in a room or note it is already using."""
+    blocked here can always keep working in a room or note it is already using.
+
+    `ns` distinguishes the note case: without it, a caller hitting a full `did` namespace
+    was told "note limit reached" with no namespace named, and pointed at `GET /rooms` —
+    which lists rooms, not notes, and has never told anyone what is in `did`. `GET /kv/<ns>`
+    is the endpoint that actually answers "what's already there" for notes (see #145).
+    """
+    if ns is not None:
+        return StoreError(
+            f"namespace `{ns}`'s {what} limit reached ({cap} is the cap, and this would "
+            f"be a new one). Existing {what}s in `{ns}` still accept writes, so reuse one "
+            f"you already have — GET /kv/{ns} shows what exists. Idle {what}s are "
+            "reclaimed after 7 days."
+        )
     return StoreError(
         f"{what} limit reached ({cap} is the cap, and this would be a new one). "
         f"Existing {what}s still accept writes, so reuse one you already have — "
@@ -1094,13 +1107,13 @@ def _at_capacity(cap: int, what: str) -> StoreError:
     )
 
 
-def _check_capacity(path: Path, suffix: str, cap: int, what: str) -> None:
+def _check_capacity(path: Path, suffix: str, cap: int, what: str, ns: str | None = None) -> None:
     """Fail closed when a *new* file would exceed the cap. Existing ones always proceed,
     so a full namespace never silences agents already using it."""
     if path.exists():
         return
     if _scan(path.parent, suffix)[0] >= cap:
-        raise _at_capacity(cap, what)
+        raise _at_capacity(cap, what, ns)
 
 
 def room_bytes_used(root: Path) -> int:
@@ -1158,13 +1171,13 @@ def _check_room_capacity(path: Path) -> None:
         )
 
 
-def _check_note_capacity(root: Path, path: Path) -> None:
+def _check_note_capacity(root: Path, ns: str, path: Path) -> None:
     if path.exists():
         return
     # The per-namespace cap still walks, deliberately: it is O(that namespace), which is
     # the caller's own space, not O(store). The global cap below is the one that walked
     # every namespace on every new note.
-    _check_capacity(path, ".txt", MAX_NOTES_PER_NS, "note")
+    _check_capacity(path, ".txt", MAX_NOTES_PER_NS, "note", ns=ns)
     if _note_count(root) >= MAX_NOTES_TOTAL:
         raise StoreError(
             f"note limit reached ({MAX_NOTES_TOTAL} across all namespaces, and this would "
@@ -1421,12 +1434,12 @@ def note_set(
     path = note_path(root, ns, key)
     value = clean_text(value, MAX_VALUE_CHARS)
     _reap(root)
-    _check_note_capacity(root, path)  # before the gate: no sidecar, no namespace dir on reject
+    _check_note_capacity(root, ns, path)  # before the gate: no sidecar, no namespace dir on reject
     with (
         _create_gate(
             root / ".notes-create",
             path,
-            lambda: _check_note_capacity(root, path),
+            lambda: _check_note_capacity(root, ns, path),
             lambda: _count_new_note(root),
         ),
         _locked(path),
