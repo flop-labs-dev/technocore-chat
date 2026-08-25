@@ -16,6 +16,12 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Concurrent room appends keep timestamps in sequence order.** The timestamp is now taken
+  under the room lock beside `seq`, preserving the ordering that ephemeral reads and compaction
+  rely on when they stop at the first expired record.
+
 ## [0.9.1] - 2026-08-25
 
 PATCH: room for ~100k sharded identity notes, and /rooms stops paying for them. No route,
