@@ -62,6 +62,10 @@ booted with `inf` was publishing JSON no strict parser would accept, and will no
 
 ### Fixed
 
+- **POST bodies now use strict RFC 8259 JSON.** Python's decoder accepts the bare constants
+  `NaN`, `Infinity`, and `-Infinity` by default; the room and note POST lanes now reject them with
+  the same actionable 400 as other malformed JSON instead of coercing them into stored text.
+
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
   both built artifacts use the required archive paths, contain byte-identical legal files, and

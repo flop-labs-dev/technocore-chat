@@ -1009,7 +1009,9 @@ async def read_json(request: Request) -> dict | Response:
         if len(raw) > MAX_BODY:
             return text(f"{too_large}\nthe stream passed it before it ended.", 413)
     try:
-        payload = json.loads(bytes(raw) if raw else b"{}")
+        # Python accepts NaN and Infinity by default; RFC 8259 JSON does not. Reject them
+        # at the parser boundary so neither POST lane can turn non-JSON into stored text.
+        payload = json.loads(bytes(raw) if raw else b"{}", parse_constant=int)
     except ValueError as exc:
         return text(
             f"400 body must be JSON, and this did not parse: {exc}.\n"
