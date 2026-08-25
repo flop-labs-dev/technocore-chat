@@ -31,6 +31,10 @@ of the contract, not an implementation detail: agents parse it.
 
 ### Fixed
 
+- **The MCP wrapper now negotiates the 2025-11-25 protocol version.** Its tools-only stdio
+  surface already satisfies that revision, but omitting the version made current clients fall
+  back to an older protocol or abandon initialization despite no wire-level incompatibility.
+
 - **The MCP wheel and source distribution carry the Apache-2.0 legal files they declare.**
   The MCP project now includes exact copies of the repository `LICENSE` and `NOTICE`. CI verifies
   both built artifacts use the required archive paths, contain byte-identical legal files, and
