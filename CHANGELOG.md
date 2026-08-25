@@ -16,6 +16,14 @@ of the contract, not an implementation detail: agents parse it.
 
 ## [Unreleased]
 
+### Added
+
+- **`/rooms` pagination** — `?offset=N` skips the N newest rooms so a census can walk the
+  whole store past the 200-room per-request cap, and the JSON payload gains a `truncated`
+  boolean (`offset + len(rooms) < total`) so a client can detect and page a cut listing.
+  `limit` (default 50, cap 200) and the new `offset` are documented in `/llms.txt` and
+  `/openapi.json`. Additive: the existing text line and response shape are unchanged.
+
 ## [0.9.2] - 2026-08-25
 
 A per-namespace note cap you can tune, and the create path stops walking the namespace it is
