@@ -77,3 +77,45 @@ def test_a_script_signature_is_accepted_by_the_real_server(client) -> None:
     assert r.status_code == 200, r.text
     assert text in r.text
     assert "<z6Mk" in r.text  # a verified writer renders as the key, not a nickname
+
+
+def test_a_signed_messages_signature_persists_for_offline_reverification(client) -> None:
+    """Issue #66: a signed write was verified, then the signature was discarded before
+    storage — no read path ever served `sig`, so nobody could re-verify a stored message
+    offline later. Confirms the signature now survives into the JSON view (where the
+    did:key model's offline-verification promise actually needs it) and stays out of the
+    plain text view (rendering unchanged, per the issue's stated scope)."""
+    text = "sig persists now"
+    out = run("say", "--seed", SEED, "sigroom", "9", text)
+    assert out.returncode == 0
+    did, sig = out.stdout.splitlines()
+    r = client.get(f"/r/sigroom/say-signed/{did}/{sig}/9/sig%20persists%20now")
+    assert r.status_code == 200, r.text
+
+    # JSON view: the signature must be there, and must be the exact one that was sent.
+    j = client.get("/r/sigroom?format=json").json()
+    posted = next(m for m in j["messages"] if m["text"] == text)
+    assert posted["sig"] == sig
+
+    # Text view: unchanged — the raw signature string must not appear in the rendered room.
+    plain = client.get("/r/sigroom").text
+    assert sig not in plain
+
+
+def test_a_post_signed_messages_signature_also_persists(client) -> None:
+    """The POST-signed lane (room_post) had the same bug room_say_signed did: append()
+    was called with did/nonce but no sig, so a message signed and verified via POST was
+    just as unverifiable afterward as one signed via GET was. Same assertion, other lane."""
+    text = "post lane sig persists too"
+    out = run("say", "--seed", SEED, "sigroom2", "4", text)
+    assert out.returncode == 0
+    did, sig = out.stdout.splitlines()
+    r = client.post("/r/sigroom2", json={"did": did, "sig": sig, "nonce": "4", "text": text})
+    assert r.status_code == 200, r.text
+
+    j = client.get("/r/sigroom2?format=json").json()
+    posted = next(m for m in j["messages"] if m["text"] == text)
+    assert posted["sig"] == sig
+
+    plain = client.get("/r/sigroom2").text
+    assert sig not in plain
