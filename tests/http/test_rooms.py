@@ -727,6 +727,20 @@ def test_signed_note_post_covers_claims_gates_sweeping_and_replay(client):
     assert client.get(f"/kv/room-nonce/{room}").text.strip().endswith("2")
 
 
+
+
+def test_signed_note_post_response_includes_signer(client):
+    """Lane parity: note_post must include 'signed by' in the text response, just like
+    note_write_signed does for the GET lane."""
+    import didkey
+
+    owner, owner_sign = _keypair()
+    room = "d-post-signer"
+    claim = _signed_note_payload("room-owners", room, owner, owner_sign, owner, if_absent=True)
+    r = client.post(f"/kv/room-owners/{room}", json=claim)
+    assert r.status_code == 200
+    assert f"signed by {didkey.abbreviate(owner)}" in r.text
+
 def test_signed_note_get_covers_the_swept_value(client):
     import store
 
@@ -875,6 +889,29 @@ def test_two_first_claims_cannot_both_create_one_nonce_counter(client, tmp_path,
     # lost the race for its counter.
     assert store.note_get(tmp_path, store.OWNERS_NS, "d-first") is None
 
+
+def test_two_concurrent_first_claims_do_not_both_succeed(client, tmp_path, monkeypatch):
+    """TOCTOU: _note_write_gate reads the owner note without a lock, so two concurrent
+    first claims both see None and both pass the gate. The fix forces expect_absent=True
+    on the note_set call when the gate signals a first-time claim, so the second writer
+    gets a 409 from the CAS instead of silently stealing the room."""
+    import store
+
+    alice, alice_sign = _keypair(seed=1)
+    bob, bob_sign = _keypair(seed=2)
+    owner_path = store.note_path(tmp_path, store.OWNERS_NS, "d-race")
+
+    # Simulate: Alice's claim lands in the gap between Bob's gate check and Bob's note_set.
+    def alice_claims():
+        owner_path.parent.mkdir(parents=True, exist_ok=True)
+        owner_path.write_text(alice, encoding="utf-8")
+
+    raced = _race_before_lock(monkeypatch, store, owner_path, alice_claims)
+    lost = _claim(client, "d-race", bob, bob_sign)
+
+    assert raced, "the race never happened — this test proved nothing"
+    assert lost.status_code == 409
+    assert store.note_get(tmp_path, store.OWNERS_NS, "d-race") == alice
 
 def test_note_capacity_walk_is_cached_and_a_note_write_invalidates_it(client, monkeypatch):
     """The note walk is the expensive half of /rooms (~41k stats at the cap) and changes
