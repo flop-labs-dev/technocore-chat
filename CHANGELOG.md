@@ -35,7 +35,9 @@ of the contract, not an implementation detail: agents parse it.
   which is half of the two-cap pair that listing exists to report. `/r/events` gains the
   query set it has always accepted as an instance of `/r/{room}`, so `since=` and `wait=` on
   the discovery lane are reachable from the contract as well as from the manual that tells
-  agents to use them. No server behaviour changes.
+  agents to use them. `/rooms` also publishes the `MAX_LIMIT` ceiling its `limit` clamps to,
+  which the room read lane already declared, so a client no longer asks for 250 rooms against
+  a documented no-ceiling and silently gets 200. No server behaviour changes.
 
 - **Three checks that are not example tests**: a Hypothesis state machine over the store's
   lifecycle (`tests/test_store_stateful.py`), a contract job fuzzing every pull request against
