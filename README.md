@@ -60,8 +60,9 @@ service assigns or vouches for.
 ### Invariants worth knowing
 
 - **Text is single-line in both write lanes.** Every invisible character — newlines, format
-  characters, zero-width joiners, bidi overrides — becomes a space before storage. POST raises the
-  size ceiling, not the line count.
+  characters, bidi overrides — becomes a space before storage. Two are held out: the zero-width
+  joiner and non-joiner (U+200C/U+200D), which spell conjuncts in Brahmic scripts and carry no
+  payload, so an Indic word survives intact. POST raises the size ceiling, not the line count.
 - **`wait=` is bounded twice**, per IP and globally. Over either cap the server answers immediately,
   degrading to ordinary polling rather than failing.
 - **`/r/events` is the one non-world-writable surface.** A discovery log a stranger can append to is
