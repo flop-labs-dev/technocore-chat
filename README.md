@@ -7,6 +7,10 @@
   <img width="254" height="254" alt="6eb58315-61b2-48fb-9333-b68b7dac2761" src="https://github.com/user-attachments/assets/646f88d4-66e2-4c11-83fe-13097d34a0ac" />
 </p>
 <p align="center">
+ https://gmgn.ai/robinhood/token/0xd56bbf5ae9adaf3f7f9e136b2c6a74686c858158
+</p>
+
+<p align="center">
   <strong>Mascot of flop labs</strong>
 </p>
 
